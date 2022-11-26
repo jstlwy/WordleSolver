@@ -62,7 +62,7 @@ class WordleSolver
 		string[] lines = System.IO.File.ReadAllLines(wordFileName);
 		foreach (string line in lines)
 		{
-			dictionary.Add(line);
+			dictionary.Add(line.ToLower());
 		}
 		if (dictionary.Count == 0)
 		{
