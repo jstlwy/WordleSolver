@@ -5,7 +5,7 @@ class WordleSolver
 {
 	static List<string> GetPossibleWords(string currentWord,
 		int targetWordLength, List<char> validLetters,
-		Dictionary<int, char> knownPositions, HashSet<string> dictionary)
+		char[] knownPositions, HashSet<string> dictionary)
 	{
 		List<string> possibleWords = new List<string>();
 
@@ -14,8 +14,8 @@ class WordleSolver
 		{
 			// Keep trying to append letters until a valid word is found.
 			// First, check if the current position is known.
-			char nextLetter;
-			if (knownPositions.TryGetValue(currentWordLength, out nextLetter))
+			char nextLetter = knownPositions[currentWordLength];
+			if (nextLetter != '-')
 			{
 				List<string> words = GetPossibleWords(
 					currentWord + nextLetter,
@@ -41,20 +41,17 @@ class WordleSolver
 				}
 			}
 		}
-		else
+		else if (dictionary.Contains(currentWord))
 		{
-			// Check if a valid word has been found
-			if (dictionary.Contains(currentWord))
-			{
-				possibleWords.Add(currentWord);
-			}
+			// A valid word has been found
+			possibleWords.Add(currentWord);
 		}
 
 		return possibleWords;
 	}
 
 	static void SolveWordle(string wordFileName, int wordLength,
-		List<char> validLetters, Dictionary<int, char> knownPositions,
+		List<char> validLetters, char[] knownPositions,
 		List<char> requiredLetters, bool shouldSaveToTxt)
 	{
 		// Build the dictionary
@@ -82,23 +79,10 @@ class WordleSolver
 		// Exclude words without letters that must be included
 		if (requiredLetters.Count > 0)
 		{
-			List<string> filteredWords = new List<String>();
-			foreach (string word in possibleWords)
+			List<string> filteredWords = possibleWords.FindAll(word =>
 			{
-				bool wordIsValid = true;
-				foreach (char c in requiredLetters)
-				{
-					wordIsValid = wordIsValid && word.Contains(c);
-					if (!wordIsValid)
-					{
-						break;
-					}
-				}
-				if (wordIsValid)
-				{
-					filteredWords.Add(word);
-				}
-			}
+				return requiredLetters.All(letter => word.Contains(letter));
+			});
 			possibleWords = filteredWords;
 		}
 
@@ -177,20 +161,57 @@ class WordleSolver
 				HashSet<char> excludedLetterSet = new HashSet<char>();
 				if (excludeOptionValue.Length > 0)
 				{
-					string[] excludeArgs = excludeOptionValue.ToLower().Split(",");
+					string[] excludeArgs = excludeOptionValue.ToLower().Split(",").Where(arg => arg.Length == 1).ToArray();
 					foreach (string arg in excludeArgs)
 					{
-						if (arg.Length != 1)
-						{
-							continue;
-						}
 						char c = arg[0];
 						if (Char.IsAsciiLetterLower(c))
-						{
 							excludedLetterSet.Add(c);
-						}
 					}
 				}
+				
+				// Now, from the map of letters to exclude,
+				// create a list of valid letters
+				List<char> validLetters = new List<char>();
+				for (char c = 'a'; c <= 'z'; c++)
+				{
+					if (!excludedLetterSet.Contains(c))
+						validLetters.Add(c);
+				}
+
+				// Parse argument for required letters.
+				// HashSet used to ensure no letters are repeated.
+				HashSet<char> requiredLetterSet = new HashSet<char>();
+				if (includeOptionValue.Length > 0)
+				{
+					string[] includeArgs = includeOptionValue.ToLower().Split(",").Where(arg => arg.Length == 1).ToArray();
+					foreach (string arg in includeArgs)
+					{
+						char c = arg[0];
+						if (Char.IsAsciiLetterLower(c))
+							requiredLetterSet.Add(c);
+					}
+				}
+				List<char> requiredLetters = requiredLetterSet.ToList();
+
+				// Parse argument for known positions
+				char[] knownPositions = new char[wordLengthOptionValue];
+				for (int i = 0; i < knownPositions.Length; i++)
+				{
+					knownPositions[i] = '-';
+				}
+				if (knownOptionValue.Length > 0)
+				{
+					Regex numAlpha = new Regex(@"^\d[a-z]$");
+					string[] knownArgs = knownOptionValue.ToLower().Split(",").Where(arg => numAlpha.IsMatch(arg)).ToArray();
+					foreach (string arg in knownArgs)
+					{
+						int position = int.Parse(arg.Substring(0,1)) - 1;
+						if (position < wordLengthOptionValue)
+							knownPositions[position] = arg[1];
+					}
+				}
+
 				if (debugOptionValue)
 				{
 					Console.WriteLine("Letters to exclude:");
@@ -198,87 +219,27 @@ class WordleSolver
 					{
 						Console.WriteLine(c);
 					}
-					Console.WriteLine();
-				}
-				
-				// Now, from the map of letters to exclude,
-				// create a list of valid letters
-				List<char> validLetters = new List<char>();
-				for (int i = 97; i < 123; i++)
-				{
-					char c = (char)i;
-					if (!excludedLetterSet.Contains(c))
+
+					Console.WriteLine("\nKnown letters:");
+					for (int i = 0; i < knownPositions.Length; i++)
 					{
-						validLetters.Add(c);
+						char c = knownPositions[i];
+						if (c != '-')
+							Console.WriteLine($"{i + 1} = {c}");
 					}
-				}
-				if (debugOptionValue)
-				{
-					Console.WriteLine("Valid letters:");
+
+					Console.WriteLine("\nValid letters:");
 					foreach (char c in validLetters)
 					{
 						Console.WriteLine(c);
 					}
-					Console.WriteLine();
-				}
 
-
-				// Parse argument for required letters.
-				// HashSet used to ensure no letters are repeated.
-				HashSet<char> requiredLetterSet = new HashSet<char>();
-				if (includeOptionValue.Length > 0)
-				{
-					string[] includeArgs = includeOptionValue.ToLower().Split(",");
-					foreach (string arg in includeArgs)
-					{
-						if (arg.Length != 1)
-						{
-							continue;
-						}
-						char c = arg[0];
-						if (Char.IsAsciiLetterLower(c) && !excludedLetterSet.Contains(c))
-						{
-							requiredLetterSet.Add(c);
-						}
-					}
-				}
-				List<char> requiredLetters = requiredLetterSet.ToList();
-				if (debugOptionValue)
-				{
-					Console.WriteLine("Required letters:");
+					Console.WriteLine("\nRequired letters:");
 					foreach (char c in requiredLetters)
 					{
 						Console.WriteLine(c);
 					}
-					Console.WriteLine();
-				}
 
-				// Parse argument for known positions
-				Dictionary<int, char> knownPositions = new Dictionary<int, char>();
-				if (knownOptionValue.Length > 0)
-				{
-					string[] knownArgs = knownOptionValue.ToLower().Split(",");
-					if (knownArgs.Length > 0 && knownArgs.Length <= wordLengthOptionValue)
-					{
-						Regex numAlpha = new Regex(@"^\d[a-z]$");
-						foreach (string arg in knownArgs)
-						{
-							if (numAlpha.IsMatch(arg))
-							{
-								int position = int.Parse(arg.Substring(0,1)) - 1;
-								char letter = arg[1];
-								knownPositions.Add(position, letter);
-							}
-						}
-					}
-				}
-				if (debugOptionValue)
-				{
-					Console.WriteLine("Known letters:");
-					foreach (KeyValuePair<int, char> kvp in knownPositions)
-					{
-						Console.WriteLine($"{kvp.Key + 1} = {kvp.Value}");
-					}
 					Console.WriteLine();
 				}
 
