@@ -1,4 +1,4 @@
-# csharp_wordle_solver
+# WordleSolver
 
 Yet another Wordle solver that I made just to get familiar with C# syntax.
 
